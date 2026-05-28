@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Alta Voice AI — Outbound BDR Agent (Ava)",
   "scripts": {
+    "start": "node server/server.js",
     "setup": "node setup.js",
     "server": "node server/server.js",
     "server:dev": "nodemon server/server.js",
