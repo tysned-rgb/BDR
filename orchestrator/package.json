@@ -1,0 +1,14 @@
+{
+  "name": "alta-voice-bdr-orchestrator",
+  "version": "1.0.0",
+  "description": "Outbound call queue runner — pulls contacts from HubSpot and fires calls via Vapi",
+  "main": "caller.js",
+  "scripts": {
+    "start": "node caller.js",
+    "dry-run": "node caller.js --dry-run"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  }
+}
