@@ -216,10 +216,93 @@ app.get('/api/activity', (req, res) => res.json(activityLog));
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
+// ── Vapi Webhook Routes (tool calls + call status) ─────────────────────────────
+const hs = require('./server/hubspot');
+
+app.post('/tool-call', async (req, res) => {
+  const { message } = req.body;
+  if (!message || !message.toolCalls?.length) return res.status(400).json({ error: 'No tool calls' });
+  const results = [];
+  for (const toolCall of message.toolCalls) {
+    const { id, function: fn } = toolCall;
+    const args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments;
+    try {
+      const result = await handleVapiTool(fn.name, args, message);
+      results.push({ toolCallId: id, result: JSON.stringify(result) });
+    } catch (err) {
+      results.push({ toolCallId: id, result: JSON.stringify({ error: err.message }) });
+    }
+  }
+  res.json({ results });
+});
+
+app.post('/call-status', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.sendStatus(200);
+  if (message.type === 'end-of-call-report') {
+    const contactId    = message.call?.metadata?.contactId;
+    const alreadyLogged = message.call?.metadata?.outcomeLogged;
+    if (contactId && !alreadyLogged) {
+      const reason  = message.call?.endedReason || 'unknown';
+      const outcome = reason === 'customer-did-not-answer' ? 'no_answer' : reason === 'voicemail' ? 'voicemail' : 'no_answer';
+      await hs.logCall({ contactId, outcome, notes: `Auto-logged. End reason: ${reason}`, durationSeconds: message.call?.duration || 0 }).catch(() => {});
+      // Update dashboard stats
+      if (outcome === 'no_answer') session.noAnswer = (session.noAnswer || 0) + 1;
+      if (outcome === 'voicemail')  session.voicemail = (session.voicemail || 0) + 1;
+      broadcast('session', session);
+    }
+  }
+  res.sendStatus(200);
+});
+
+app.get('/health', (req, res) => res.json({ status: 'ok', agent: 'Ava - Alta Voice BDR' }));
+
+async function handleVapiTool(name, args, message) {
+  const contactId = args.contact_id || message?.call?.metadata?.contactId || null;
+  switch (name) {
+    case 'get_contact_info': {
+      if (!contactId) throw new Error('contact_id required');
+      const contact = await hs.getContact(contactId);
+      const p = contact.properties;
+      return { contact_id: contactId, first_name: p.firstname||'', last_name: p.lastname||'', full_name: [p.firstname,p.lastname].filter(Boolean).join(' ')||'there', company: p.company||'your practice', job_title: p.jobtitle||'', phone: p.phone||p.mobilephone||'', email: p.email||'' };
+    }
+    case 'send_booking_link': {
+      const bookingUrl = process.env.DEMO_BOOKING_URL || 'https://meetings.hubspot.com/altavoice/demo';
+      if (contactId) await hs.logCall({ contactId, outcome: 'demo_booked', notes: `Booking link sent to ${args.phone_number}`, durationSeconds: 0 }).catch(()=>{});
+      session.demos = (session.demos || 0) + 1;
+      broadcast('session', session);
+      logActivity({ firstName: '', lastName: '', company: '' }, 'demo_booked', 'Booking link sent');
+      return { sms: { to: args.phone_number, body: `Hi! This is Ava from Alta Voice AI. Here's the link to book your 15-min demo: ${bookingUrl}` }, confirmation: 'Booking link sent.', booking_url: bookingUrl };
+    }
+    case 'log_call_outcome': {
+      if (!contactId) throw new Error('contact_id required');
+      await hs.logCall({ contactId, outcome: args.outcome||'no_answer', notes: args.notes||'', durationSeconds: args.duration_seconds||0, callRecordingUrl: message?.call?.recordingUrl||null });
+      if (args.outcome === 'demo_booked')        session.demos         = (session.demos||0) + 1;
+      if (args.outcome === 'callback_requested') session.callbacks     = (session.callbacks||0) + 1;
+      if (args.outcome === 'not_interested')     session.notInterested = (session.notInterested||0) + 1;
+      broadcast('session', session);
+      return { success: true, logged_outcome: args.outcome };
+    }
+    case 'create_followup_task': {
+      if (!contactId) throw new Error('contact_id required');
+      const dueDate = args.callback_date ? new Date(`${args.callback_date} ${args.callback_time||'09:00'}`) : new Date(Date.now() + 86400000*2);
+      await hs.createFollowupTask({ contactId, subject: 'Call back - Alta Voice BDR (Ava)', body: args.notes||'', dueDate });
+      session.callbacks = (session.callbacks||0) + 1;
+      broadcast('session', session);
+      return { success: true, task_due: dueDate.toISOString() };
+    }
+    default: throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
 // ── Start ──────────────────────────────────────────────────────────────────────
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n🎙️  Ava Dashboard running at http://localhost:${PORT}`);
-  console.log(`   Opening in browser...\n`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🎙️  Ava — Alta Voice BDR`);
+  console.log(`   Dashboard:   http://localhost:${PORT}`);
+  console.log(`   Tool calls:  POST http://localhost:${PORT}/tool-call`);
+  console.log(`   Health:      GET  http://localhost:${PORT}/health`);
+  console.log(`\n   Opening dashboard in browser...`);
+  console.log(`   To expose for Vapi: ngrok http ${PORT}\n`);
   const { exec } = require('child_process');
   exec(`open http://localhost:${PORT}`);
 });

@@ -8,9 +8,10 @@
 require('dotenv').config();
 const axios = require('axios');
 
-const VAPI_KEY    = process.env.VAPI_API_KEY;
+const VAPI_KEY     = process.env.VAPI_API_KEY;
 const ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
-const SERVER_URL  = process.env.SERVER_URL;
+// Accept SERVER_URL from env or command line: SERVER_URL=https://... node patch-server-url.js
+const SERVER_URL   = process.env.SERVER_URL;
 
 async function patch() {
   console.log(`\nPatching Ava to use: ${SERVER_URL}\n`);
