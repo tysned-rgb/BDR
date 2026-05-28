@@ -204,7 +204,7 @@ async function handleTool(name, args, message) {
 // START SERVER
 // ─────────────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🎙️  Alta Voice BDR Server running on port ${PORT}`);
   console.log(`   Tool calls:  POST http://localhost:${PORT}/tool-call`);
   console.log(`   Call status: POST http://localhost:${PORT}/call-status`);

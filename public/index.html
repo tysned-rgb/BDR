@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ava — Alta Voice BDR</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f4f0; color: #1a1a18; min-height: 100vh; }
+  .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
+  .header-left p { font-size: 12px; color: #888; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .header-left h1 { font-size: 22px; font-weight: 600; }
+  .status-badge { display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #e5e3de; border-radius: 8px; padding: 6px 14px; font-size: 13px; color: #666; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+  .dot.online { background: #639922; }
+  .dot.calling { background: #ef9f27; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: #fff; border: 1px solid #e5e3de; border-radius: 10px; padding: 14px 16px; }
+  .stat label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
+  .stat .value { font-size: 24px; font-weight: 600; }
+  .stat .value.green { color: #3B6D11; }
+  .card { background: #fff; border: 1px solid #e5e3de; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .card-title { font-size: 14px; font-weight: 600; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .btn { font-size: 13px; padding: 7px 18px; border-radius: 8px; border: 1px solid #d5d3ce; background: #fff; color: #333; cursor: pointer; font-family: inherit; font-weight: 500; transition: background 0.15s; }
+  .btn:hover { background: #f5f4f0; }
+  .btn-start { background: #EAF3DE; color: #3B6D11; border-color: #afd080; }
+  .btn-start:hover { background: #daecc9; }
+  .btn-stop { background: #FCEBEB; color: #A32D2D; border-color: #f09595; display: none; }
+  .btn-stop:hover { background: #f7d5d5; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .limit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .limit-row label { font-size: 13px; color: #666; }
+  .limit-row input { width: 70px; padding: 5px 8px; border: 1px solid #d5d3ce; border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .progress-wrap { background: #f5f4f0; border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; }
+  .progress-bar-track { flex: 1; height: 5px; background: #e5e3de; border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 5px; background: #639922; border-radius: 3px; width: 0%; transition: width 0.4s ease; }
+  .progress-label { font-size: 12px; color: #888; white-space: nowrap; }
+  .status-msg { font-size: 13px; color: #888; margin-top: 8px; min-height: 18px; }
+  .activity-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+  .activity-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; background: #f9f8f5; border-radius: 8px; font-size: 13px; }
+  .activity-icon { flex-shrink: 0; font-size: 14px; width: 20px; }
+  .activity-body { flex: 1; }
+  .activity-name { font-weight: 500; }
+  .activity-sub { color: #888; font-size: 12px; }
+  .activity-time { font-size: 11px; color: #aaa; flex-shrink: 0; margin-top: 2px; }
+  .empty-state { text-align: center; padding: 2rem; color: #aaa; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-left">
+      <p>Alta Voice AI</p>
+      <h1>Ava — BDR Dashboard</h1>
+    </div>
+    <div class="status-badge">
+      <div class="dot online" id="server-dot"></div>
+      <span id="server-status">Server online</span>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><label>In queue</label><div class="value" id="stat-queue">—</div></div>
+    <div class="stat"><label>Called today</label><div class="value" id="stat-called">0</div></div>
+    <div class="stat"><label>Demos booked</label><div class="value green" id="stat-demos">0</div></div>
+    <div class="stat"><label>Callbacks</label><div class="value" id="stat-callbacks">0</div></div>
+    <div class="stat"><label>Not interested</label><div class="value" id="stat-noint">0</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Call session</span>
+      <div class="controls">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:13px;color:#666;">Limit:</label>
+          <input type="number" id="limit-input" value="" placeholder="All" min="1" class="btn" style="width:70px;text-align:center;">
+        </div>
+        <button class="btn btn-start" id="btn-start" onclick="startCalling()">Start calling</button>
+        <button class="btn btn-stop" id="btn-stop" onclick="stopCalling()">Stop</button>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div class="progress-label"><span id="progress-count">0</span> / <span id="progress-total">0</span></div>
+    </div>
+    <div class="status-msg" id="status-msg">Ready — press Start calling to begin</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Live activity</span></div>
+    <div class="activity-list" id="activity-list">
+      <div class="empty-state">No activity yet</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let session = { total: 0, called: 0, demos: 0, callbacks: 0, notInterested: 0 };
+  let calling  = false;
+
+  function updateStats() {
+    document.getElementById('stat-called').textContent    = session.called || 0;
+    document.getElementById('stat-demos').textContent     = session.demos || 0;
+    document.getElementById('stat-callbacks').textContent = session.callbacks || 0;
+    document.getElementById('stat-noint').textContent     = session.notInterested || 0;
+    const pct = session.total > 0 ? (session.called / session.total) * 100 : 0;
+    document.getElementById('progress-fill').style.width  = pct + '%';
+    document.getElementById('progress-count').textContent = session.called || 0;
+    document.getElementById('progress-total').textContent = session.total || 0;
+  }
+
+  function addActivity(entry) {
+    const list = document.getElementById('activity-list');
+    const empty = list.querySelector('.empty-state');
+    if (empty) empty.remove();
+
+    const outcomeLabels = {
+      demo_booked: 'Demo booked', callback_requested: 'Callback requested',
+      not_interested: 'Not interested', no_answer: 'No answer',
+      voicemail: 'Left voicemail', gatekeeper: 'Gatekeeper',
+      wrong_contact: 'Wrong contact', calling: 'Calling...',
+    };
+
+    const div = document.createElement('div');
+    div.className = 'activity-item';
+    div.innerHTML = `
+      <div class="activity-icon">${entry.icon}</div>
+      <div class="activity-body">
+        <div class="activity-name">${entry.name}${entry.company ? ' · ' + entry.company : ''}</div>
+        <div class="activity-sub">${outcomeLabels[entry.outcome] || entry.outcome}${entry.note ? ' — ' + entry.note : ''}</div>
+      </div>
+      <div class="activity-time">${entry.time}</div>`;
+    list.insertBefore(div, list.firstChild);
+    if (list.children.length > 30) list.removeChild(list.lastChild);
+  }
+
+  function setCallingState(isCalling) {
+    calling = isCalling;
+    document.getElementById('btn-start').style.display = isCalling ? 'none' : '';
+    document.getElementById('btn-stop').style.display  = isCalling ? '' : 'none';
+    const dot = document.getElementById('server-dot');
+    dot.className = 'dot ' + (isCalling ? 'calling' : 'online');
+    document.getElementById('server-status').textContent = isCalling ? 'Calling...' : 'Server online';
+  }
+
+  async function startCalling() {
+    const limitVal = document.getElementById('limit-input').value;
+    const limit    = limitVal ? parseInt(limitVal) : undefined;
+    await fetch('/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(limit ? { limit } : {}),
+    });
+    setCallingState(true);
+  }
+
+  async function stopCalling() {
+    await fetch('/api/stop', { method: 'POST' });
+    document.getElementById('status-msg').textContent = 'Stopping after current call...';
+  }
+
+  async function loadStats() {
+    try {
+      const res  = await fetch('/api/stats');
+      const data = await res.json();
+      document.getElementById('stat-queue').textContent = data.queueCount || 0;
+      if (data.session) { session = data.session; updateStats(); }
+      setCallingState(data.calling || false);
+    } catch (e) {}
+  }
+
+  function connectSSE() {
+    const es = new EventSource('/api/events');
+
+    es.addEventListener('init', e => {
+      const d = JSON.parse(e.data);
+      calling = d.calling;
+      session = d.session || session;
+      setCallingState(calling);
+      updateStats();
+      if (d.activityLog?.length) {
+        [...d.activityLog].reverse().forEach(addActivity);
+      }
+    });
+
+    es.addEventListener('session', e => {
+      session = JSON.parse(e.data);
+      updateStats();
+    });
+
+    es.addEventListener('activity', e => {
+      addActivity(JSON.parse(e.data));
+    });
+
+    es.addEventListener('status', e => {
+      const d = JSON.parse(e.data);
+      document.getElementById('status-msg').textContent = d.message || '';
+      if (typeof d.calling === 'boolean') setCallingState(d.calling);
+    });
+
+    es.addEventListener('calling_state', e => {
+      const d = JSON.parse(e.data);
+      setCallingState(d.calling);
+    });
+
+    es.onerror = () => {
+      document.getElementById('server-dot').className = 'dot';
+      document.getElementById('server-status').textContent = 'Reconnecting...';
+      setTimeout(connectSSE, 3000);
+      es.close();
+    };
+  }
+
+  loadStats();
+  connectSSE();
+</script>
+</body>
+</html>
